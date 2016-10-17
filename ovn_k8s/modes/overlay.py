@@ -25,6 +25,7 @@ vlog = ovs.vlog.Vlog("overlay")
 
 
 class OvnNB(object):
+
     def __init__(self):
         self.service_cache = {}
         self.logical_switch_cache = {}
@@ -36,10 +37,10 @@ class OvnNB(object):
 
         try:
             physical_gateway_ip_networks = ovn_nbctl(
-                                "--data=bare", "--no-heading",
-                                "--columns=network", "find",
-                                "logical_router_port",
-                                "external_ids:gateway-physical-ip=yes").split()
+                "--data=bare", "--no-heading",
+                "--columns=network", "find",
+                "logical_router_port",
+                "external_ids:gateway-physical-ip=yes").split()
         except Exception as e:
             vlog.err("_populate_gateway_ip: find failed %s" % (str(e)))
 
@@ -298,8 +299,8 @@ class OvnNB(object):
         else:
             try:
                 response_json = kubernetes.get_service(
-                                                   variables.K8S_API_SERVER,
-                                                   namespace, service_name)
+                    variables.K8S_API_SERVER,
+                    namespace, service_name)
             except exceptions.NotFound:
                 vlog.dbg("No service found for endpoint %s " % service_name)
                 return
@@ -326,10 +327,10 @@ class OvnNB(object):
 
         try:
             existing_logical_ports = ovn_nbctl(
-                                "--data=bare", "--no-heading",
-                                "--columns=name", "find",
-                                "logical_switch_port",
-                                "external_id:pod=true").split()
+                "--data=bare", "--no-heading",
+                "--columns=name", "find",
+                "logical_switch_port",
+                "external_id:pod=true").split()
             existing_logical_ports = set(existing_logical_ports)
         except Exception as e:
             vlog.err("sync_pods: find failed %s" % (str(e)))

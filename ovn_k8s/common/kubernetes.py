@@ -179,7 +179,7 @@ def _get_objects(url, namespace, resource_type, resource_id):
 
 def get_service(server, namespace, service):
     url = "%s/api/v1/namespaces/%s/services/%s" \
-            % (server, namespace, service)
+        % (server, namespace, service)
     return _get_objects(url, namespace, 'service', service)
 
 

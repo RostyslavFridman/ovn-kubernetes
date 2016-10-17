@@ -263,16 +263,16 @@ def minion_init(args):
 
     if not os.path.isfile(CNI_FILE):
         data = {
-                "name": "net",
-                "type": "ovn_cni",
-                "bridge": "br-int",
-                "isGateway": "true",
-                "ipMasq": "false",
-                "ipam": {
-                         "type": "host-local",
-                         "subnet": args.minion_switch_subnet
-                        }
-                }
+            "name": "net",
+            "type": "ovn_cni",
+            "bridge": "br-int",
+            "isGateway": "true",
+            "ipMasq": "false",
+            "ipam": {
+                    "type": "host-local",
+                    "subnet": args.minion_switch_subnet
+            }
+        }
         with open(CNI_FILE, 'w') as outfile:
             json.dump(data, outfile)
 
@@ -398,8 +398,8 @@ def main():
 
     # Parser for sub-command 'master-init'.
     parser_master_init = subparsers.add_parser(
-                                           'master-init',
-                                           help="Initialize k8s master node")
+        'master-init',
+        help="Initialize k8s master node")
     parser_master_init.add_argument('--cluster-ip-subnet', required=True,
                                     help="The cluster wide larger subnet of "
                                     "private ip addresses.")
@@ -412,8 +412,8 @@ def main():
 
     # Parser for sub-command 'minion-init'.
     parser_minion_init = subparsers.add_parser(
-                                           'minion-init',
-                                           help="Initialize k8s minion node")
+        'minion-init',
+        help="Initialize k8s minion node")
     parser_minion_init.add_argument('--cluster-ip-subnet', required=True,
                                     help="The cluster wide larger subnet of "
                                     "private ip addresses.")
@@ -427,8 +427,8 @@ def main():
 
     # Parser for sub-command 'gateway-init'.
     parser_gateway_init = subparsers.add_parser(
-                                           'gateway-init',
-                                           help="Initialize k8s gateway node")
+        'gateway-init',
+        help="Initialize k8s gateway node")
     parser_gateway_init.add_argument('--cluster-ip-subnet', required=True,
                                      help="The cluster wide larger subnet of "
                                      "private ip addresses.")
