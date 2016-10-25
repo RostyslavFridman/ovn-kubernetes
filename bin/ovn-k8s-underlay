@@ -40,11 +40,66 @@ def fetch_ovn_nb():
     variables.OVN_NB = OVN_NB
 
 
-def create_management_port(node_name, vlan_id, local_subnet, mgmt_ip):
-
-    ip = netaddr.IPNetwork(mgmt_ip)
+def _create_logical_switch(node_name, vlan_id, local_subnet, router_ip_mask):
+    ip = netaddr.IPNetwork(router_ip_mask)
     router_ip_mask = str(ip)
     router_ip = str(ip.ip)
+
+    switch_name = "vlan%s-%s" % (vlan_id, node_name)
+    # Create a logical switch and set its subnet.
+    ovn_nbctl("--", "--may-exist", "ls-add", switch_name,
+              "--", "set", "logical_switch", switch_name,
+              "other-config:subnet=" + local_subnet,
+              "external-ids:gateway_ip=" + router_ip)
+
+    return switch_name
+
+
+def _connect_switch_to_router(switch_name, node_name, vlan_id, router_mac, router_ip_mask):
+    # Connect the switch to the router.
+    ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
+              "stor-" + vlan_id + "-" + node_name,
+              "--", "set", "logical_switch_port",
+              "stor-" + vlan_id + "-" + node_name, "type=router",
+              "options:router-port=rtos-" + vlan_id + "-" + node_name,
+              "addresses=" + "\"" + router_mac + " " + router_ip_mask + "\"")
+
+
+def _create_vlan_access_port(vlan_id, switch_name, mgmtif_name):
+        # Create vlan access port
+        interface_name = "vlan%s-if" % (vlan_id)
+        ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
+                  interface_name, '', vlan_id)
+        ovn_nbctl("--", "lsp-set-addresses", interface_name,
+                  "unknown")
+        ovn_nbctl("--", "lsp-set-type", interface_name,
+                  "localnet")
+
+        # Connect vlan access port to external network
+        ovn_nbctl("--", "lsp-set-options", interface_name,
+                  "network_name=physical_net")
+
+        # Create a OVS internal interface
+        ovs_vsctl("--", "--may-exist", "add-port", "br-int",
+                  mgmtif_name, "--", "set", "interface",
+                  mgmtif_name, "type=internal",
+                  "mtu_request=1400",
+                  "external-ids:iface-id=" + mgmtif_name)
+
+        mac_address = ovs_vsctl("--if-exists", "get", "interface",
+                                mgmtif_name, "mac_in_use").strip('"')
+        if not mac_address:
+            raise Exception("failed to get mac address of ovn-k8s-master")
+
+        # Create the OVN logical port
+        ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
+                  mgmtif_name, "--", "lsp-set-addresses",
+                  mgmtif_name, mac_address)
+
+
+def _create_logical_router_port(node_name, vlan_id, mgmt_ip):
+    ip = netaddr.IPNetwork(mgmt_ip)
+    router_ip_mask = str(ip)
 
     router_name = "vlan%s-%s" % (vlan_id, node_name)
     # Create router port
@@ -57,60 +112,10 @@ def create_management_port(node_name, vlan_id, local_subnet, mgmt_ip):
                   "rtos-" + vlan_id + "-" + node_name,
                   router_mac, router_ip_mask)
 
-    switch_name = "vlan%s-%s" % (vlan_id, node_name)
-    # Create a logical switch and set its subnet.
-    ovn_nbctl("--", "--may-exist", "ls-add", switch_name,
-              "--", "set", "logical_switch", switch_name,
-              "other-config:subnet=" + local_subnet,
-              "external-ids:gateway_ip=" + router_ip)
+    return router_ip_mask, router_mac
 
-    # Connect the switch to the router.
-    ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
-              "stor-" + vlan_id + "-" + node_name,
-              "--", "set", "logical_switch_port",
-              "stor-" + vlan_id + "-" + node_name, "type=router",
-              "options:router-port=rtos-" + vlan_id + "-" + node_name,
-              "addresses=" + "\"" + router_mac + " " + router_ip_mask + "\"")
 
-    # Create vlan access port
-    interface_name = "vlan%s-if" % (vlan_id)
-    ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
-              interface_name, '', vlan_id)
-    ovn_nbctl("--", "lsp-set-addresses", interface_name,
-              "unknown")
-    ovn_nbctl("--", "lsp-set-type", interface_name,
-              "localnet")
-
-    # Connect vlan access port to external network
-    ovn_nbctl("--", "lsp-set-options", interface_name,
-              "network_name=physical_net")
-
-    interface_name = "vlan%s-mgmt" % (vlan_id)
-    # Create a OVS internal interface
-    ovs_vsctl("--", "--may-exist", "add-port", "br-int",
-              interface_name, "--", "set", "interface",
-              interface_name, "type=internal",
-              "mtu_request=1400",
-              "external-ids:iface-id=" + interface_name)
-
-    mac_address = ovs_vsctl("--if-exists", "get", "interface",
-                            interface_name, "mac_in_use").strip('"')
-    if not mac_address:
-        raise Exception("failed to get mac address of ovn-k8s-master")
-
-    # Create the OVN logical port
-    ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
-              interface_name, "--", "lsp-set-addresses",
-              interface_name, mac_address)
-
-    # Shutdown the interface.
-    command = "ip link set %s down" % (interface_name)
-    util.call_popen(shlex.split(command))
-
-    # The interface may already exist, in which case delete the routes and IP.
-    command = "ip addr flush dev %s" % (interface_name)
-    util.call_popen(shlex.split(command))
-
+def _create_balancer(switch_name):
     # Add the load_balancer to the switch.
     k8s_cluster_lb_tcp = ovn_nbctl("--data=bare", "--no-heading",
                                    "--columns=_uuid", "find", "load_balancer",
@@ -126,10 +131,42 @@ def create_management_port(node_name, vlan_id, local_subnet, mgmt_ip):
         ovn_nbctl("add", "logical_switch", switch_name,
                   "load_balancer", k8s_cluster_lb_udp)
 
-    # Create a logical switch and set its subnet.
-    ovn_nbctl("--", "--may-exist", "ls-add", switch_name,
-              "--", "set", "logical_switch", switch_name,
-              "other-config:subnet=" + local_subnet)
+
+def create_management_port(node_name, vlan_id, local_subnet, mgmt_ip):
+
+    router_ip_mask, router_mac = _create_logical_router_port(node_name,
+                                                             vlan_id,
+                                                             mgmt_ip)
+
+    switch_name = _create_logical_switch(node_name, vlan_id, local_subnet,
+                                         router_ip_mask)
+
+    _connect_switch_to_router(switch_name, node_name, vlan_id, router_mac,
+                              router_ip_mask)
+
+    mgmtif_name = "vlan%s-mgmt" % (vlan_id)
+    _create_vlan_access_port(vlan_id, switch_name, mgmtif_name)
+
+    # Shutdown the interface.
+    command = "ip link set %s down" % (mgmtif_name)
+    util.call_popen(shlex.split(command))
+
+    # The interface may already exist, in which case delete the routes and IP.
+    command = "ip addr flush dev %s" % (mgmtif_name)
+    util.call_popen(shlex.split(command))
+
+    _create_balancer(switch_name)
+
+
+def create_public_interface(node_name, vlan_id, local_subnet, default_gw, public_if_ip):
+
+    switch_name = _create_logical_switch(node_name, vlan_id, local_subnet,
+                                         default_gw)
+
+    mgmtif_name = "public-if"
+    _create_vlan_access_port(vlan_id, switch_name, mgmtif_name)
+    command = "ifconfig %s %s" % (mgmtif_name, public_if_ip)
+    util.call_popen(shlex.split(command))
 
 
 def master_init(args):
@@ -179,6 +216,9 @@ def master_init(args):
     create_management_port(args.node_name, args.vlan_id,
                            args.vlan_ip_subnet, args.mgmt_ip)
 
+    if args.public_if_ip:
+        create_public_interface(args.node_name, args.vlan_id, args.vlan_ip_subnet,
+                                args.default_gw, args.public_if_ip)
     # Add a static route in GR with physical gateway as the default next hop.
     if args.default_gw:
         ovn_nbctl("--may-exist", "lr-route-add", router_name,
@@ -262,6 +302,8 @@ def main():
                                     help="Management IP address.")
     parser_master_init.add_argument('--default-gw',
                                     help="Default gateway for subnet.")
+    parser_master_init.add_argument('--public-if-ip',
+                                    help="Set public interface with IP")
     parser_master_init.set_defaults(func=master_init)
 
     # Parser for sub-command 'minion-init'.
