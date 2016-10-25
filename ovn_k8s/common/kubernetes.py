@@ -62,7 +62,7 @@ def _stream_api(url):
     headers = {}
     if api_token:
         headers['Authorization'] = 'Bearer %s' % api_token
-
+    print(url)
     if ca_certificate:
         response = requests.get(url, headers=headers,
                                 verify=ca_certificate, stream=True)

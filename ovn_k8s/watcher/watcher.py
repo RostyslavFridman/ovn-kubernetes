@@ -70,7 +70,7 @@ def _sync_k8s_pods():
     if variables.OVN_MODE == "overlay":
         mode = ovn_k8s.modes.overlay.OvnNB()
     else:
-        return
+        mode = ovn_k8s.modes.underlay.OvnNB()
 
     try:
         pods = kubernetes.get_all_pods(variables.K8S_API_SERVER)
@@ -84,7 +84,7 @@ def _sync_k8s_services():
     if variables.OVN_MODE == "overlay":
         mode = ovn_k8s.modes.overlay.OvnNB()
     else:
-        return
+        mode = ovn_k8s.modes.underlay.OvnNB()
 
     try:
         services = kubernetes.get_all_services(variables.K8S_API_SERVER)

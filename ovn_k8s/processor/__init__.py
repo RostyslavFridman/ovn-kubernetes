@@ -20,6 +20,7 @@ from six.moves import queue
 
 import ovs.vlog
 import ovn_k8s.modes.overlay
+import ovn_k8s.modes.underlay
 import ovn_k8s.common.variables as variables
 
 vlog = ovs.vlog.Vlog("baseprocessor")
@@ -49,8 +50,7 @@ class BaseProcessor(object):
         if variables.OVN_MODE == "overlay":
             self.mode = ovn_k8s.modes.overlay.OvnNB()
         else:
-            vlog.emer("OVN mode not defined.")
-            sys.exit(1)
+            self.mode = ovn_k8s.modes.underlay.OvnNB()
 
     @abc.abstractmethod
     def process_events(self, events):

@@ -34,7 +34,7 @@ def ovn_init_k8s(args):
     if args.overlay:
         config.ovn_init_overlay()
     elif args.underlay:
-        sys.exit("Underlay mode not implemented")
+        config.ovn_init_underlay()
     elif args.openstack:
         sys.exit("OpenStack mode not implemented")
 
