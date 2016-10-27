@@ -132,8 +132,10 @@ class OvnNB(object):
 
     def create_logical_port(self, event):
         data = event.metadata
-        if "vlan" in data['metadata']['annotations']:
-            logical_switch = "vlan" + data['metadata']['annotations']['vlan'] + "-" + data['spec']['nodeName']
+        if 'vlan' in data['metadata']['annotations']['ovn']:
+            logical_switch = "vlan" + \
+                data['metadata']['annotations']['ovn']['vlan'] + "-" + \
+                data['spec']['nodeName']
         else:
             logical_switch = data['spec']['nodeName']
         pod_name = data['metadata']['name']
