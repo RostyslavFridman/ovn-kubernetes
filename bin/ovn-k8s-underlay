@@ -54,7 +54,8 @@ def _create_logical_switch(node_name, vlan_id, local_subnet, router_ip_mask):
     return switch_name
 
 
-def _connect_switch_to_router(switch_name, node_name, vlan_id, router_mac, router_ip_mask):
+def _connect_switch_to_router(switch_name, node_name, vlan_id, router_mac,
+                              router_ip_mask):
     # Connect the switch to the router.
     ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
               "stor-" + vlan_id + "-" + node_name,
@@ -160,7 +161,9 @@ def create_public_interface(node_name, vlan_id, local_subnet, default_gw,
 
     mgmtif_name = "public-if"
     _create_vlan_access_port(vlan_id, switch_name, mgmtif_name)
-    command = "ifconfig %s %s" % (mgmtif_name, public_if_ip)
+    command = "ip addr flush %s" % (mgmtif_name)
+    util.call_popen(shlex.split(command))
+    command = "ip addr add %s dev %s" % (public_if_ip, mgmtif_name)
     util.call_popen(shlex.split(command))
 
 
@@ -212,8 +215,9 @@ def master_init(args):
                            args.vlan_ip_subnet, args.mgmt_ip)
 
     if args.public_if_ip:
-        create_public_interface(args.node_name, args.vlan_id, args.vlan_ip_subnet,
-                                args.default_gw, args.public_if_ip)
+        create_public_interface(args.node_name, args.vlan_id,
+                                args.vlan_ip_subnet, args.default_gw,
+                                args.public_if_ip)
     # Add a static route in GR with physical gateway as the default next hop.
     if args.default_gw:
         ovn_nbctl("--may-exist", "lr-route-add", router_name,
