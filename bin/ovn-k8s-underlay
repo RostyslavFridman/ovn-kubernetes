@@ -43,14 +43,13 @@ def fetch_ovn_nb():
 def _create_logical_switch(node_name, vlan_id, local_subnet, router_ip_mask):
     ip = netaddr.IPNetwork(router_ip_mask)
     router_ip_mask = str(ip)
-    router_ip = str(ip.ip)
 
     switch_name = "vlan%s-%s" % (vlan_id, node_name)
     # Create a logical switch and set its subnet.
     ovn_nbctl("--", "--may-exist", "ls-add", switch_name,
               "--", "set", "logical_switch", switch_name,
               "other-config:subnet=" + local_subnet,
-              "external-ids:gateway_ip=" + router_ip)
+              "external-ids:gateway_ip=" + router_ip_mask)
 
     return switch_name
 
@@ -69,11 +68,9 @@ def _create_vlan_access_port(vlan_id, switch_name, mgmtif_name):
         # Create vlan access port
         interface_name = "vlan%s-if" % (vlan_id)
         ovn_nbctl("--", "--may-exist", "lsp-add", switch_name,
-                  interface_name, '', vlan_id)
-        ovn_nbctl("--", "lsp-set-addresses", interface_name,
-                  "unknown")
-        ovn_nbctl("--", "lsp-set-type", interface_name,
-                  "localnet")
+                  interface_name, '', vlan_id,
+                  "--", "lsp-set-addresses", interface_name, "unknown",
+                  "--", "lsp-set-type", interface_name, "localnet")
 
         # Connect vlan access port to external network
         ovn_nbctl("--", "lsp-set-options", interface_name,
@@ -98,9 +95,6 @@ def _create_vlan_access_port(vlan_id, switch_name, mgmtif_name):
 
 
 def _create_logical_router_port(node_name, vlan_id, mgmt_ip):
-    ip = netaddr.IPNetwork(mgmt_ip)
-    router_ip_mask = str(ip)
-
     router_name = "vlan%s-%s" % (vlan_id, node_name)
     # Create router port
     router_mac = ovn_nbctl("--if-exist", "get", "logical_router_port",
@@ -110,9 +104,9 @@ def _create_logical_router_port(node_name, vlan_id, mgmt_ip):
         router_mac = util.generate_mac()
         ovn_nbctl("--", "--may-exist", "lrp-add", router_name,
                   "rtos-" + vlan_id + "-" + node_name,
-                  router_mac, router_ip_mask)
+                  router_mac, mgmt_ip)
 
-    return router_ip_mask, router_mac
+    return router_mac
 
 
 def _create_balancer(switch_name):
@@ -134,15 +128,15 @@ def _create_balancer(switch_name):
 
 def create_management_port(node_name, vlan_id, local_subnet, mgmt_ip):
 
-    router_ip_mask, router_mac = _create_logical_router_port(node_name,
-                                                             vlan_id,
-                                                             mgmt_ip)
+    router_mac = _create_logical_router_port(node_name,
+                                             vlan_id,
+                                             mgmt_ip)
 
     switch_name = _create_logical_switch(node_name, vlan_id, local_subnet,
-                                         router_ip_mask)
+                                         mgmt_ip)
 
     _connect_switch_to_router(switch_name, node_name, vlan_id, router_mac,
-                              router_ip_mask)
+                              mgmt_ip)
 
     mgmtif_name = "vlan%s-mgmt" % (vlan_id)
     _create_vlan_access_port(vlan_id, switch_name, mgmtif_name)
@@ -158,7 +152,8 @@ def create_management_port(node_name, vlan_id, local_subnet, mgmt_ip):
     _create_balancer(switch_name)
 
 
-def create_public_interface(node_name, vlan_id, local_subnet, default_gw, public_if_ip):
+def create_public_interface(node_name, vlan_id, local_subnet, default_gw,
+                            public_if_ip):
 
     switch_name = _create_logical_switch(node_name, vlan_id, local_subnet,
                                          default_gw)
@@ -278,6 +273,8 @@ def gateway_init(args):
               "external-ids:ovn-bridge-mappings=physical_net:br-ext")
     ovs_vsctl("--", "--may-exist", "add-port", "br-ext",
               args.physical_interface)
+    ovs_vsctl("--", "set", "interface", args.physical_interface,
+              "lldp:enable=true")
 
 
 def main():
@@ -301,9 +298,9 @@ def main():
     parser_master_init.add_argument('--mgmt-ip',
                                     help="Management IP address.")
     parser_master_init.add_argument('--default-gw',
-                                    help="Default gateway for subnet.")
+                                    help="Default gateway with subnet.")
     parser_master_init.add_argument('--public-if-ip',
-                                    help="Set public interface with IP")
+                                    help="Set public interface with IP/CIDR")
     parser_master_init.set_defaults(func=master_init)
 
     # Parser for sub-command 'minion-init'.
@@ -322,7 +319,7 @@ def main():
     parser_minion_init.add_argument('--mgmt-ip',
                                     help="Management IP address.")
     parser_minion_init.add_argument('--default-gw',
-                                    help="Default gateway for subnet.")
+                                    help="Default gateway with subnet.")
     parser_minion_init.set_defaults(func=minion_init)
 
     # Parser for sub-command 'gateway-init'.

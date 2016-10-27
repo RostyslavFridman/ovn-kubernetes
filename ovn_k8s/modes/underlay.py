@@ -132,7 +132,10 @@ class OvnNB(object):
 
     def create_logical_port(self, event):
         data = event.metadata
-        logical_switch = data['metadata']['vlan'] + "-" + data['spec']['nodeName']
+        if "vlan" in data['metadata']['annotations']:
+            logical_switch = "vlan" + data['metadata']['annotations']['vlan'] + "-" + data['spec']['nodeName']
+        else:
+            logical_switch = data['spec']['nodeName']
         pod_name = data['metadata']['name']
         namespace = data['metadata']['namespace']
         logical_port = "%s_%s" % (namespace, pod_name)
@@ -181,7 +184,6 @@ class OvnNB(object):
             return
 
         (mac_address, ip_address) = addresses.split()
-
         namespace = data['metadata']['namespace']
         pod_name = data['metadata']['name']
 
