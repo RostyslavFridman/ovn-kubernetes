@@ -136,8 +136,7 @@ class OvnNB(object):
         if 'ovn' in data['metadata']['annotations']:
             params = json.loads(data['metadata']['annotations']['ovn'])
             if 'vlan' in params:
-                logical_switch = "vlan" + \
-                    data['metadata']['annotations']['ovn']['vlan'] + "-" + \
+                logical_switch = "vlan" + params['vlan'] + "-" + \
                     data['spec']['nodeName']
             else:
                 logical_switch = data['spec']['nodeName']
