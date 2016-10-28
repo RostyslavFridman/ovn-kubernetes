@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import ast
+import json
 import time
 
 import ovs.vlog
@@ -132,10 +133,14 @@ class OvnNB(object):
 
     def create_logical_port(self, event):
         data = event.metadata
-        if 'vlan' in data['metadata']['annotations']['ovn']:
-            logical_switch = "vlan" + \
-                data['metadata']['annotations']['ovn']['vlan'] + "-" + \
-                data['spec']['nodeName']
+        if 'ovn' in data['metadata']['annotations']:
+            params = json.loads(data['metadata']['annotations']['ovn'])
+            if 'vlan' in params:
+                logical_switch = "vlan" + \
+                    data['metadata']['annotations']['ovn']['vlan'] + "-" + \
+                    data['spec']['nodeName']
+            else:
+                logical_switch = data['spec']['nodeName']
         else:
             logical_switch = data['spec']['nodeName']
         pod_name = data['metadata']['name']
