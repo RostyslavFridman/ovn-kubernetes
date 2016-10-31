@@ -131,6 +131,8 @@ def setup_interface(pid, container_id, cni_ifname, mac_address,
                   % (pid, gateway_ip)
         call_popen(shlex.split(command))
 
+        vlog.dbg("Setting svc_gateway_ip %s for container:%s"
+                 % (gateway_ip, container_id))
         command = "ip netns exec %s ip route add %s via %s" \
                   % (pid, svc_subnet, svc_gateway_ip)
         call_popen(shlex.split(command))
@@ -170,7 +172,7 @@ def cni_add(cni_ifname, cni_netns, namespace, pod_name, container_id):
         except Exception as e:
             vlog.err("failed to get pod annotation: %s" % (str(e)))
 
-        if annotation and annotation.get('ovn'):
+        if annotation and annotation.get('ovn') and annotation.get('ovn_dynamic'):
             break
 
         counter = counter - 1
@@ -181,9 +183,19 @@ def cni_add(cni_ifname, cni_netns, namespace, pod_name, container_id):
 
     try:
         ovn_annotated_dict = ast.literal_eval(annotation['ovn'])
-        ip_address = ovn_annotated_dict['ip_address']
-        mac_address = ovn_annotated_dict['mac_address']
-        gateway_ip = ovn_annotated_dict['gateway_ip']
+        ovn_dynamic_annotated_dict = ast.literal_eval(annotation['ovn_dynamic'])
+        if 'ip_address' in ovn_annotated_dict:
+            ip_address = ovn_annotated_dict['ip_address']
+        else:
+            ip_address = ovn_dynamic_annotated_dict['ip_address']
+        if 'mac_address' in ovn_annotated_dict:
+            mac_address = ovn_annotated_dict['mac_address']
+        else:
+            mac_address = ovn_dynamic_annotated_dict['mac_address']
+        if 'gateway_ip' in ovn_annotated_dict:
+            gateway_ip = ovn_annotated_dict['gateway_ip']
+        else:
+            gateway_ip = ovn_dynamic_annotated_dict['gateway_ip']
         svc_subnet = ovn_annotated_dict['svc_subnet']
         svc_gateway_ip = ovn_annotated_dict['svc_gateway_ip']
     except Exception as e:
@@ -192,7 +204,7 @@ def cni_add(cni_ifname, cni_netns, namespace, pod_name, container_id):
     veth_outside = setup_interface(pid, container_id, cni_ifname,
                                    mac_address, ip_address,
                                    gateway_ip, svc_subnet, svc_gateway_ip)
-
+    vlog.dbg("CONFIGURED INTERFACE")
     iface_id = "%s_%s" % (namespace, pod_name)
 
     try:

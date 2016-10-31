@@ -133,10 +133,13 @@ class OvnNB(object):
 
     def create_logical_port(self, event):
         data = event.metadata
+        vlog.info("POD NAME: %s" % data['metadata']['name'])
+        vlog.info("CREATE LOGICAL PORT")
         if 'ovn' in data['metadata']['annotations']:
             params = json.loads(data['metadata']['annotations']['ovn'])
             if 'vlan' in params:
-                logical_switch = "vlan" + params['vlan'] + "-" + \
+                vlog.info("GETTING VLAN: %s" % params['vlan'])
+                logical_switch = "vlan" + str(params['vlan']) + "-" + \
                     data['spec']['nodeName']
             else:
                 logical_switch = data['spec']['nodeName']
@@ -202,7 +205,7 @@ class OvnNB(object):
         try:
             kubernetes.set_pod_annotation(variables.K8S_API_SERVER,
                                           namespace, pod_name,
-                                          "ovn", str(annotation))
+                                          "ovn_dynamic", str(annotation))
         except Exception as e:
             vlog.err("_create_logical_port: failed to annotate addresses (%s)"
                      % (str(e)))
