@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import ast
-import json
 import time
 
 import ovs.vlog
@@ -21,6 +20,7 @@ from ovn_k8s.common import exceptions
 import ovn_k8s.common.kubernetes as kubernetes
 import ovn_k8s.common.variables as variables
 from ovn_k8s.common.util import ovn_nbctl
+from ovn_k8s.common.util import generate_mac
 
 vlog = ovs.vlog.Vlog("underlay")
 
@@ -136,10 +136,10 @@ class OvnNB(object):
         vlog.info("POD NAME: %s" % data['metadata']['name'])
         vlog.info("CREATE LOGICAL PORT")
         if 'ovn' in data['metadata']['annotations']:
-            params = json.loads(data['metadata']['annotations']['ovn'])
-            if 'vlan' in params:
-                vlog.info("GETTING VLAN: %s" % params['vlan'])
-                logical_switch = "vlan" + str(params['vlan']) + "-" + \
+            ovn_annotated_dict = ast.literal_eval(data['metadata']['annotations']['ovn'])
+            if 'vlan' in ovn_annotated_dict:
+                vlog.info("USE VLAN: %s" % ovn_annotated_dict['vlan'])
+                logical_switch = "vlan" + ovn_annotated_dict['vlan'] + "-" + \
                     data['spec']['nodeName']
             else:
                 logical_switch = data['spec']['nodeName']
@@ -158,16 +158,37 @@ class OvnNB(object):
             vlog.err("_create_logical_port: failed to get gateway_ip")
             return
 
-        try:
-            ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
-                      logical_port, "--", "lsp-set-addresses",
-                      logical_port, "dynamic", "--", "set",
-                      "logical_switch_port", logical_port,
-                      "external-ids:namespace=" + namespace,
-                      "external-ids:pod=true")
-        except Exception as e:
-            vlog.err("_create_logical_port: lsp-add (%s)" % (str(e)))
-            return
+        dynamic_address = True
+        mac_address = ""
+        if 'ovn' in data['metadata']['annotations']:
+            ovn_annotated_dict = ast.literal_eval(data['metadata']['annotations']['ovn'])
+            if 'ip_address' in ovn_annotated_dict:
+                ip_address = ovn_annotated_dict['ip_address']
+                mac_address = generate_mac()
+                dynamic_address = False
+
+        if dynamic_address:
+            try:
+                ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
+                          logical_port, "--", "lsp-set-addresses",
+                          logical_port, "dynamic", "--", "set",
+                          "logical_switch_port", logical_port,
+                          "external-ids:namespace=" + namespace,
+                          "external-ids:pod=true")
+            except Exception as e:
+                vlog.err("_create_logical_port: lsp-add (%s)" % (str(e)))
+                return
+        else:
+            try:
+                ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
+                          logical_port, "--", "lsp-set-addresses",
+                          logical_port, "%s %s" % (mac_address, ip_address), "--", "set",
+                          "logical_switch_port", logical_port,
+                          "external-ids:namespace=" + namespace,
+                          "external-ids:pod=true")
+            except Exception as e:
+                vlog.err("_create_logical_port: lsp-add (%s)" % (str(e)))
+                return
 
         # We wait for a maximum of 3 seconds to get the dynamic addresses in
         # intervals of 0.1 seconds.
@@ -175,9 +196,17 @@ class OvnNB(object):
         counter = 30
         while counter != 0:
             try:
-                ret = ovn_nbctl("get", "logical_switch_port", logical_port,
-                                "dynamic_addresses")
-                addresses = ast.literal_eval(ret)
+                addresses = []
+                if dynamic_address:
+                    ret = ovn_nbctl("get", "logical_switch_port", logical_port,
+                                    "dynamic_addresses")
+                    addresses = ast.literal_eval(ret)
+                else:
+                    ret = ovn_nbctl("get", "logical_switch_port", logical_port,
+                                    "addresses")
+                    address_list = ast.literal_eval(ret)
+                    addresses = address_list[0]
+                    vlog.info("RETURN: %s" % addresses)
                 if len(addresses):
                     break
             except Exception as e:
