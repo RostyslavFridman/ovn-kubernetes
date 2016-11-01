@@ -180,12 +180,14 @@ class OvnNB(object):
                 return
         else:
             try:
-                ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
-                          logical_port, "--", "lsp-set-addresses",
-                          logical_port, "%s %s" % (mac_address, ip_address), "--", "set",
-                          "logical_switch_port", logical_port,
-                          "external-ids:namespace=" + namespace,
-                          "external-ids:pod=true")
+                ret = ovn_nbctl("--", "--if-exists", "get", "logical_switch_port",  logical_port,  "addresses")
+                if not ret:
+                    ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
+                              logical_port, "--", "lsp-set-addresses",
+                              logical_port, "%s %s" % (mac_address, ip_address), "--", "set",
+                              "logical_switch_port", logical_port,
+                              "external-ids:namespace=" + namespace,
+                              "external-ids:pod=true")
             except Exception as e:
                 vlog.err("_create_logical_port: lsp-add (%s)" % (str(e)))
                 return

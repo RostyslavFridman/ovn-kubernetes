@@ -27,7 +27,7 @@ from ovn_k8s.common import kubernetes
 from ovn_k8s.common.util import ovs_vsctl
 from ovn_k8s.common.util import call_popen
 
-vlog = ovs.vlog.Vlog("ovn-k8s-cni-overlay")
+vlog = ovs.vlog.Vlog("ovn-k8s-cni-underlay")
 
 LOGFILE = "/var/log/openvswitch/ovn-k8s-cni-underlay.log"
 CNI_VERSION = "0.1.0"
