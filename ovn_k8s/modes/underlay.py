@@ -155,6 +155,18 @@ class OvnNB(object):
                      "Not creating logical port" % (data))
             return
 
+        try:
+            logical_switch_uuid = ovn_nbctl("--", "--if-exists", "get",
+                                            "logical_switch", logical_switch,
+                                            "_uuid")
+        except Exception as e:
+            vlog.err("_create_logical_port: get logical switch (%s)" % (str(e)))
+            return
+
+        if not logical_switch_uuid:
+            vlog.info("_create_logical_port: wrong host, nothing to do")
+            return
+
         vlog.info("Create logical port %s on logical switch %s" %
                   (logical_port, logical_switch))
 
