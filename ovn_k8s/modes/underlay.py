@@ -110,6 +110,7 @@ class OvnNB(object):
             gateway_ip_mask = cached_logical_switch.get('gateway_ip_mask')
         else:
             try:
+                vlog.info("Get gateway ip from switch %s" % (logical_switch))
                 gateway_ip_mask = ovn_nbctl("--if-exists", "get",
                                             "logical_switch", logical_switch,
                                             "external_ids:gateway_ip"
@@ -133,12 +134,12 @@ class OvnNB(object):
 
     def create_logical_port(self, event):
         data = event.metadata
-        vlog.info("POD NAME: %s" % data['metadata']['name'])
-        vlog.info("CREATE LOGICAL PORT")
+        vlog.info("Get event for pod name %s in namespace %s" %
+                  (data['metadata']['name'], data['metadata']['namespace']))
         if 'ovn' in data['metadata']['annotations']:
             ovn_annotated_dict = ast.literal_eval(data['metadata']['annotations']['ovn'])
             if 'vlan' in ovn_annotated_dict:
-                vlog.info("USE VLAN: %s" % ovn_annotated_dict['vlan'])
+                vlog.info("Use vlan: %s" % (ovn_annotated_dict['vlan']))
                 logical_switch = "vlan" + ovn_annotated_dict['vlan'] + "-" + \
                     data['spec']['nodeName']
             else:
@@ -152,6 +153,9 @@ class OvnNB(object):
             vlog.err("absent node name or pod name in pod %s. "
                      "Not creating logical port" % (data))
             return
+
+        vlog.info("Create logical port %s on logical switch %s" %
+                  (logical_port, logical_switch))
 
         (gateway_ip, mask) = self._get_switch_gateway_ip(logical_switch)
         if not gateway_ip or not mask:
