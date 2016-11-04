@@ -180,7 +180,8 @@ class OvnNB(object):
         if 'ovn' in data['metadata']['annotations']:
             ovn_annotated_dict = ast.literal_eval(data['metadata']['annotations']['ovn'])
             if 'ip_address' in ovn_annotated_dict:
-                ip_address = ovn_annotated_dict['ip_address']
+                ip_address_mask = ovn_annotated_dict['ip_address']
+                (ip_address, mask) = ip_address_mask.split("/")
                 mac_address = generate_mac()
                 dynamic_address = False
 
