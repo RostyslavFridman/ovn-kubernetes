@@ -70,6 +70,8 @@ class PodWatcher(object):
             has_conn_event = True
         elif event_type == 'DELETED':
             has_conn_event = True
+        elif event_type == 'MODIFIED' and 'change' in pod_data['metadata']['annotations']:
+            has_conn_event = True
         else:
             return
 

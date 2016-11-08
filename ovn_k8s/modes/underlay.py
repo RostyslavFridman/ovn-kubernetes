@@ -16,11 +16,14 @@ import ast
 import time
 
 import ovs.vlog
+import shlex
 from ovn_k8s.common import exceptions
 import ovn_k8s.common.kubernetes as kubernetes
 import ovn_k8s.common.variables as variables
+from ovn_k8s.common.util import call_popen
 from ovn_k8s.common.util import ovn_nbctl
 from ovn_k8s.common.util import generate_mac
+from ovn_k8s.common.util import get_container_id
 
 vlog = ovs.vlog.Vlog("underlay")
 
@@ -185,6 +188,7 @@ class OvnNB(object):
                 mac_address = generate_mac()
                 dynamic_address = False
 
+        vlog.info("USE IP ADDRESS: %s" % ip_address_mask)
         if dynamic_address:
             try:
                 ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
@@ -206,6 +210,31 @@ class OvnNB(object):
                               "logical_switch_port", logical_port,
                               "external-ids:namespace=" + namespace,
                               "external-ids:pod=true")
+                else:
+                    old_address_list = ast.literal_eval(ret)
+                    old_addresses = old_address_list[0]
+                    (old_mac_address, old_ip_address) = old_addresses.split()
+                    if old_ip_address != ip_address:
+                        ovn_nbctl("--if-exists", "lsp-del", logical_port)
+                        ovn_nbctl("--", "--may-exist", "lsp-add", logical_switch,
+                                  logical_port, "--", "lsp-set-addresses",
+                                  logical_port, "%s %s" % (old_mac_address, ip_address), "--", "set",
+                                  "logical_switch_port", logical_port,
+                                  "external-ids:namespace=" + namespace,
+                                  "external-ids:pod=true")
+                        # get pause container id and pid
+                        (container_id, container_pid) = get_container_id(pod_name, namespace)
+                        vlog.dbg("Setting gateway_ip %s for container:%s"
+                                 % (gateway_ip, container_id))
+                        command = "ip netns exec %s ip route add default via %s" \
+                                  % (container_pid, gateway_ip)
+                        call_popen(shlex.split(command))
+
+                        vlog.dbg("Setting svc_gateway_ip %s for container:%s"
+                                 % (gateway_ip, container_id))
+                        command = "ip netns exec %s ip route add %s via %s" \
+                                  % (container_pid, "10.3.0.0/16", gateway_ip)
+                        call_popen(shlex.split(command))
             except Exception as e:
                 vlog.err("_create_logical_port: lsp-add (%s)" % (str(e)))
                 return

@@ -71,3 +71,22 @@ def process_stream(data_stream, event_callback):
         event_callback(json.loads(line))
     except ValueError:
         vlog.warn("Invalid JSON data from response stream:%s" % line)
+
+
+def get_container_id(pod_name, namespace):
+    from docker import Client
+    cli = Client()
+    substrings = [pod_name, namespace]
+    for container in cli.containers():
+        if all(x in container['Names'][0] for x in substrings):
+            if 'pause' in container['Command']:
+                container_id = container['Id']
+
+    if not container_id:
+        vlog.err("Couldn't get container_id for %s in namespace %s" %
+                 (pod_name, namespace))
+        return False, False
+
+    container_pid = cli.inspect_container(container_id)["State"]["Pid"]
+
+    return container_id, container_pid
