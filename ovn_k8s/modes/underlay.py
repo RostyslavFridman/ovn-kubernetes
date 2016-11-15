@@ -22,6 +22,7 @@ import ovn_k8s.common.kubernetes as kubernetes
 import ovn_k8s.common.variables as variables
 from ovn_k8s.common.util import call_popen
 from ovn_k8s.common.util import ovn_nbctl
+from ovn_k8s.common.util import ovn_sbctl
 from ovn_k8s.common.util import generate_mac
 from ovn_k8s.common.util import get_container_id
 
@@ -337,6 +338,7 @@ class OvnNB(object):
         data = event.metadata
         pod_name = data['metadata']['name']
         namespace = data['metadata']['namespace']
+
         logical_port = "%s_%s" % (namespace, pod_name)
         if not logical_port:
             vlog.err("absent pod name in pod %s. "
@@ -348,6 +350,24 @@ class OvnNB(object):
         except Exception as e:
             vlog.err("_delete_logical_port: lsp-add (%s)" % (str(e)))
             return
+
+        if 'ovn' in data['metadata']['annotations']:
+            ovn_annotated_dict = ast.literal_eval(data['metadata']['annotations']['ovn'])
+            if 'ip_address' in ovn_annotated_dict:
+                ip_address_mask = ovn_annotated_dict['ip_address']
+                (ip_address, mask) = ip_address_mask.split("/")
+
+            mac_binding = ovn_sbctl("--data=bare", "--no-heading",
+                                    "--columns=_uuid", "find", "MAC_Binding",
+                                    "ip=" + ip_address)
+
+            if mac_binding:
+                try:
+                    vlog.info("Flushing MAC for address: %s" % ip_address)
+                    ovn_sbctl("destroy", "MAC_Binding", mac_binding)
+                except Exception as e:
+                    vlog.err("_delete_logical_port: destroy mac binding (%s)" % (str(e)))
+                    return
 
         vlog.info("deleted logical port %s" % (logical_port))
 

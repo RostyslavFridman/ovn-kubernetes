@@ -50,6 +50,10 @@ def ovn_nbctl(*args):
     return call_prog("ovn-nbctl", args_list)
 
 
+def ovn_sbctl(*args):
+    return call_prog("ovn-sbctl", list(args))
+
+
 def generate_mac(prefix="00:00:00"):
     random.seed()
     mac = "%s:%02X:%02X:%02X" % (
