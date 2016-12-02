@@ -22,7 +22,7 @@ from ovn_k8s.common import exceptions
 from ovn_k8s.common.util import ovs_vsctl
 from ovn_k8s.common import variables
 
-CA_CERTIFICATE = "/etc/openvswitch/k8s-ca.crt"
+CA_CERTIFICATE = "/etc/kubernetes/ssl/ca.pem"
 vlog = ovs.vlog.Vlog("kubernetes")
 
 
