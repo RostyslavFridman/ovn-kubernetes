@@ -94,7 +94,7 @@ def create_management_port(node_name, local_subnet, cluster_subnet):
               "options:router-port=rtos-" + node_name,
               "addresses=" + "\"" + router_mac + "\"")
 
-    interface_name = "k8s-%s" % (node_name[:11])
+    interface_name = "public-if"
     # Create a OVS internal interface
     ovs_vsctl("--", "--may-exist", "add-port", "br-int",
               interface_name, "--", "set", "interface",
